@@ -29,7 +29,7 @@ module testbench_TCM4671;
     transmit = 1;
     #2
     transmit = 0;
-    wait(nSCS);
+    wait(done);
     #10
     writeNOTread = 1;
     // trigger transmission
