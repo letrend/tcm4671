@@ -3,14 +3,19 @@ module TCM4671 (
     input clk,
     input reset,
     input transmit,
+    input [6:0] address,
+    input writeNOTread,
+    input [31:0] data_in,
+    output reg [31:0] data_out,
     output SCK,
     output MOSI,
     input MISO,
-    output nSCS
+    output nSCS,
+    output done
   );
 
   parameter CLOCK_FREQ_HZ = 50_000_000;
-  parameter SPI_FREQ_HZ = 25_000_000;
+  parameter SPI_FREQ_HZ = 1_000_000;
 
   reg slow_clk;
   reg [7:0] clk_counter;
@@ -36,10 +41,6 @@ module TCM4671 (
     end
   end
 
-  reg [6:0] address;
-  reg writeNOTread;
-  reg [31:0] data_in;
-  reg [31:0] data_out;
   wire [39:0] datagram;
   reg [5:0] bit_counter;
 
@@ -54,9 +55,6 @@ module TCM4671 (
     if (reset) begin
       bit_counter <= 39;
       data_out <= 0;
-      data_in <= 0;
-      writeNOTread <= 0;
-      address <= 1;
       slow_clk_prev <= 0;
       transmit_state <= 0;
       delay_counter <= 0;
@@ -70,7 +68,7 @@ module TCM4671 (
         TRANSMIT: begin
           slow_clk_prev <= slow_clk;
           if(!slow_clk && slow_clk_prev)begin // slow_clk negative edge
-            if(bit_counter==0)begin // transmission finished
+            if(bit_counter==0)begin // transmission done
               bit_counter <= 39;
               transmit_state <= IDLE;
             end else begin
@@ -81,7 +79,7 @@ module TCM4671 (
               end
             end
           end else if(!slow_clk && slow_clk_prev)begin // slow_clk positive edge
-            if(bit_counter<32)begin
+            if(bit_counter<32)begin // clock in the data available on the MISO line
               data_out[bit_counter] = MISO;
             end
           end
