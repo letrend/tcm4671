@@ -11,7 +11,7 @@ module TCM4671 (
     output MOSI,
     input MISO,
     output nSCS,
-    output reg done
+    output reg busy
   );
 
   parameter CLOCK_FREQ_HZ = 50_000_000;
@@ -20,11 +20,11 @@ module TCM4671 (
   reg slow_clk;
   reg [7:0] clk_counter;
 
-  localparam  IDLE = 0, DELAY = 1, TRANSMIT = 2;
+  localparam  IDLE = 0, DELAY = 1, TRANSMIT = 2, DELAY_DONE = 3;
   reg [1:0] transmit_state;
 
   assign SCK = slow_clk;
-  assign nSCS = !(transmit_state!=IDLE);
+  assign nSCS = !(transmit_state==TRANSMIT || transmit_state==DELAY);
 
   always @(posedge clk or posedge reset) begin: SPI_CLOCK_GENERATION
     if (reset) begin
@@ -34,10 +34,10 @@ module TCM4671 (
       if(transmit_state==TRANSMIT)begin
         clk_counter <= clk_counter-1;
         if(clk_counter==0)begin
-          clk_counter <= CLOCK_FREQ_HZ/SPI_FREQ_HZ/2;
+          clk_counter <= CLOCK_FREQ_HZ/SPI_FREQ_HZ/2-1;
           slow_clk <= !slow_clk;
         end
-      end else if(transmit_state==IDLE)begin
+      end else if(transmit_state==IDLE || transmit_state==DELAY_DONE)begin
         slow_clk = 1;
       end
     end
@@ -54,32 +54,31 @@ module TCM4671 (
   always @ ( posedge clk or posedge reset ) begin
     reg slow_clk_prev;
     reg [7:0] delay_counter;
-    reg nSCS_prev, transmit_prev, initial_negative_edge;
+    reg initial_negative_edge;
+    reg [5:0] delay_done_counter;
     if (reset) begin
       data_out <= 0;
       slow_clk_prev <= 0;
       transmit_state <= 0;
       delay_counter <= 0;
+      bit_counter <= 39;
     end else begin
-      done <= 0;
-      nSCS_prev <= nSCS;
-      transmit_prev <= transmit;
-      if(!nSCS_prev && nSCS)begin // posedge nSCS
-        done <= 1;
-      end
       case (transmit_state)
         IDLE: begin
-          if(transmit && !transmit_prev) begin // positive transmit edge
+          busy <= 0;
+          if(transmit) begin
             transmit_state <= TRANSMIT;
             bit_counter <= 39;
             initial_negative_edge <= 1;
+            busy <= 1;
           end
         end
         TRANSMIT: begin
           slow_clk_prev <= slow_clk;
           if(!slow_clk && slow_clk_prev)begin // slow_clk negative edge
             if(bit_counter==0)begin // transmission done
-              transmit_state <= IDLE;
+              transmit_state <= DELAY_DONE;
+              delay_done_counter <= 10;
             end else begin
               if(initial_negative_edge)begin
                 initial_negative_edge <= 0;
@@ -101,6 +100,12 @@ module TCM4671 (
           delay_counter<=delay_counter-1;
           if(delay_counter==0)begin
             transmit_state <= TRANSMIT;
+          end
+        end
+        DELAY_DONE: begin
+          delay_done_counter<=delay_done_counter-1;
+          if(delay_done_counter==0)begin
+            transmit_state <= IDLE;
           end
         end
       endcase

@@ -1,6 +1,5 @@
-`timescale 1ns/1ps
+`timescale 10ns/10ns
 module testbench_TCM4671;
-  timeunit 1ns;
   reg clk, reset, transmit;
   reg writeNOTread;
   reg [6:0] address;
@@ -17,28 +16,29 @@ module testbench_TCM4671;
   begin
     clk = 0;
     reset = 0;
-    #2
+    #3
     reset = 1;
-    #2
+    #1
     reset = 0;
-    #10
+    #1
     address = 1;
     data_in = 0;
     writeNOTread = 0;
+    transmit = 0;
+    #2
     // trigger transmission
     transmit = 1;
-    #2
+    #1
     transmit = 0;
     wait(done);
-    #10
     writeNOTread = 1;
     // trigger transmission
     transmit = 1;
-    #2
+    #3
     transmit = 0;
   end
 
   always
-    #5 clk = !clk;
+    #1 clk = !clk;
 
 endmodule // testbench_TCM4671
