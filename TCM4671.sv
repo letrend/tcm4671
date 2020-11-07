@@ -29,7 +29,7 @@ module TCM4671 (
   always @(posedge clk or posedge reset) begin: SPI_CLOCK_GENERATION
     if (reset) begin
       slow_clk <= 1;
-      clk_counter <= CLOCK_FREQ_HZ/SPI_FREQ_HZ/2;
+      clk_counter <= CLOCK_FREQ_HZ/SPI_FREQ_HZ/2-1;
     end else begin
       if(transmit_state==TRANSMIT)begin
         clk_counter <= clk_counter-1;
@@ -76,6 +76,13 @@ module TCM4671 (
         TRANSMIT: begin
           slow_clk_prev <= slow_clk;
           if(!slow_clk && slow_clk_prev)begin // slow_clk negative edge
+            if(bit_counter==32 && !writeNOTread)begin // if we read we need to make a small pause after transmitting the address
+              transmit_state <= DELAY;
+              delay_counter <= CLOCK_FREQ_HZ/2_000_000; // 500ns delay
+            end
+            if(bit_counter<=31 && bit_counter>=0)begin // clock in the data available on the MISO line
+              data_out[bit_counter] <= MISO;
+            end
             if(bit_counter==0)begin // transmission done
               transmit_state <= DELAY_DONE;
               delay_done_counter <= 10;
@@ -85,14 +92,6 @@ module TCM4671 (
               end else begin
                 bit_counter <= bit_counter - 1;
               end
-            end
-          end else if(slow_clk && !slow_clk_prev)begin // slow_clk positive edge
-            if(bit_counter==32 && !writeNOTread)begin // if we read we need to make a small pause after transmitting the address
-              transmit_state <= DELAY;
-              delay_counter <= CLOCK_FREQ_HZ/2_000_000; // 500ns delay
-            end
-            if(bit_counter<=31 && bit_counter>=0)begin // clock in the data available on the MISO line
-              data_out[bit_counter] <= MISO;
             end
           end
         end
